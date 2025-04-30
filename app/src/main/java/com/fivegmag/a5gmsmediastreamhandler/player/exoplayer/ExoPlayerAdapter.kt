@@ -9,9 +9,12 @@ import androidx.media3.common.util.Util
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
+import androidx.media3.exoplayer.upstream.CmcdConfiguration
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.dash.manifest.DashManifest
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.upstream.CmcdConfiguration.MODE_QUERY_PARAMETER
+import androidx.media3.exoplayer.upstream.CmcdConfiguration.MODE_REQUEST_HEADER
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.exoplayer.util.EventLogger
 import androidx.media3.ui.PlayerView
@@ -19,6 +22,8 @@ import com.fivegmag.a5gmscommonlibrary.helpers.ContentTypes
 import com.fivegmag.a5gmscommonlibrary.helpers.PlayerStates
 import com.fivegmag.a5gmscommonlibrary.helpers.StatusInformation
 import com.fivegmag.a5gmscommonlibrary.helpers.UserAgentTokens
+import com.google.common.collect.ImmutableListMultimap
+import java.util.UUID
 
 @UnstableApi
 class ExoPlayerAdapter() : IExoPlayerAdapter {
@@ -48,11 +53,42 @@ class ExoPlayerAdapter() : IExoPlayerAdapter {
                 val dataSource = httpDataSourceFactory.createDataSource()
                 dataSource
             }
+
+        val cmcdConfigurationFactory = object : CmcdConfiguration.Factory {
+            override fun createCmcdConfiguration(mediaItem: MediaItem): CmcdConfiguration {
+                val cmcdRequestConfig = object : CmcdConfiguration.RequestConfig {
+                    override fun isKeyAllowed(key: String): Boolean {
+                        //return key == "br" || key == "bl"
+                        return true
+                    }
+
+                    /*override fun getCustomData(): ImmutableListMultimap<@CmcdConfiguration.HeaderKey String, String> {
+                        return ImmutableListMultimap.of(
+                            CmcdConfiguration.KEY_CMCD_OBJECT, "key1=stringValue")
+                    }*/
+
+                    override fun getRequestedMaximumThroughputKbps(throughputKbps: Int): Int {
+                        return 5 * throughputKbps
+                    }
+                }
+
+                val sessionId = UUID.randomUUID().toString()
+                val contentId = UUID.randomUUID().toString()
+
+                //return CmcdConfiguration(sessionId, contentId, cmcdRequestConfig, MODE_QUERY_PARAMETER)
+                return CmcdConfiguration(sessionId, contentId, cmcdRequestConfig, MODE_REQUEST_HEADER)
+            }
+        }
+
         playerInstance = ExoPlayer.Builder(context)
             .setMediaSourceFactory(
-                DefaultMediaSourceFactory(context).setDataSourceFactory(dataSourceFactory)
+                DefaultMediaSourceFactory(context)
+                    .setDataSourceFactory(dataSourceFactory)
+                    .setCmcdConfigurationFactory(cmcdConfigurationFactory)
+
             )
             .build()
+
         playerInstance.addAnalyticsListener(EventLogger())
         bandwidthMeter = DefaultBandwidthMeter.Builder(context).build()
         playerView = exoPlayerView
